@@ -1,0 +1,123 @@
+stock_defines = ["LIBEFIVAR_VERSION=37"]
+
+filegroup(
+    name = "headers",
+    srcs = glob(["src/**/*.h"]),
+)
+
+cc_binary(
+    name = "makeguids",
+    srcs = [
+        "src/makeguids.c",
+        "src/guid.c",
+        ":headers",
+    ],
+    linkopts = ["-ldl"],
+    defines = stock_defines + ["EFIVAR_BUILD_ENVIRONMENT"],
+)
+
+genrule(
+    name = "makeguids_out",
+    tools = [":makeguids"],
+    srcs = ["src/guids.txt"],
+    outs = [
+        "src/guids.bin",
+        "src/names.bin",
+        "src/guid-symbols.c",
+        "src/include/efivar/efivar-guids.h",
+    ],
+    cmd = "$(location :makeguids) $(location :src/guids.txt) $(location :src/guids.bin) $(location :src/names.bin) $(location :src/guid-symbols.c) $(location :src/include/efivar/efivar-guids.h)",
+)
+
+genrule(
+    name = "guids_cc",
+    outs = ["src/guids.o"],
+    srcs = ["src/guids.S", "src/guids.bin", "src/names.bin"],
+    cmd = (
+        #"$(CC) -nostdlib -o $(location :src/guids.o) -no-pie -Xlinker -r -Wl,-b -Wl,binary -I$$(dirname $(location :src/guids.bin)) $(location :src/guids.S)"
+        "$(CC) -fPIC -c -o $@ -I$$(dirname $(location :src/guids.bin)) $(location :src/guids.S)"
+    ),
+    toolchains = ["@bazel_tools//tools/cpp:current_cc_toolchain"],
+)
+
+genrule(
+    name = "efivar_hdrs",
+    srcs = [
+        "src/include/efivar/efivar-guids.h",
+        "src/include/efivar/efivar.h",
+        "src/include/efivar/efivar-dp.h",
+    ],
+    outs = [
+        "efivar-guids.h",
+        "efivar.h",
+        "efivar-dp.h",
+    ],
+    cmd = "for f in $(SRCS); do mv $$f $(@D); done",
+)
+
+cc_library(
+    name = "efivar",
+    defines = stock_defines,
+    linkopts = [
+        "-ldl",
+    ],
+    srcs = [
+        "src/dp.c",
+        "src/dp-acpi.c",
+        "src/dp-hw.c",
+        "src/dp-media.c",
+        "src/dp-message.c",
+        "src/efivarfs.c",
+        "src/error.c",
+        "src/export.c",
+        "src/guid.c",
+        "src/lib.c",
+        "src/vars.c",
+        ":headers",
+        ":guids_cc",
+        "src/guid-symbols.c",
+    ],
+    hdrs = [
+        "src/include/efivar/efivar-guids.h",
+        "src/include/efivar/efivar.h",
+        "src/include/efivar/efivar-dp.h",
+    ],
+    linkstatic = True,
+    strip_include_prefix = "src/include/efivar/",
+    visibility = ["//visibility:public"],
+)
+
+genrule(
+    name = "efiboot_ldscript",
+    srcs = ["src/libefiboot.map.in"],
+    outs = ["src/libefiboot.map.ld"],
+    cmd = "cat $< > $@",
+)
+
+cc_library(
+    name = "efiboot",
+    defines = stock_defines,
+    srcs = [
+        "src/crc32.c",
+        "src/creator.c",
+        "src/disk.c",
+        "src/gpt.c",
+        "src/loadopt.c",
+        "src/path-helpers.c",
+        "src/linux.c",
+    ] + glob([
+        "src/linux-*.c",
+    ]),
+    deps = [
+        "src/libefiboot.map.ld",
+        ":efivar",
+    ],
+    hdrs = [
+        "src/include/efivar/efiboot.h",
+        "src/include/efivar/efiboot-creator.h",
+        "src/include/efivar/efiboot-loadopt.h",
+    ],
+    linkstatic = True,
+    strip_include_prefix = "src/include/efivar/",
+    visibility = ["//visibility:public"],
+)

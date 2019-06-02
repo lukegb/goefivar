@@ -15,7 +15,7 @@
 package efiboot
 
 // #cgo pkg-config: efiboot
-// #include <efiboot.h>
+// #include "efiboot.h"
 // #include <stdlib.h>
 import "C"
 

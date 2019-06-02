@@ -15,7 +15,7 @@
 package efivar
 
 // #cgo pkg-config: efivar
-// #include <efivar.h>
+// #include "efivar.h"
 // #include <stdlib.h>
 import "C"
 
